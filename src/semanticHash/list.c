@@ -1,44 +1,28 @@
+#include <stdarg.h>
+#include <stdbool.h>
 #include "list.h"
 #include "dbg.h"
 
-List *List_create()
+
+
+List *List_create(bool is_data_internal)
 {
-	return (List *) calloc(1, sizeof(List));
+	List * new =  (List *) calloc(1, sizeof(List));
+    new->is_hollow = is_data_internal;
+    return new;
 }
 
 List *List_copy(List *old)
 {
+	//TODO Speed this up  by copying into a block?
 	List *new = NULL;
 	check_hard(old, "Must pass an initilized list");
-	new = List_create();
+	new = List_create(false);
 	check_hard(new, "Failed to allocate memory");
 	LIST_FOREACH(old, first, next, cur) {
 		List_push(new, cur->value);
 	}
-	//TODO Speed this up  by copying into a block?
-        /*ListNode *new_nodes;
-	     ListNode *node;
-	     int count = 0;
-
-	     new_nodes = (ListNode *) calloc(old->count, sizeof(ListNode));
-
-	     LIST_FOREACH(old, first, next, cur) {
-
-	     node = new_nodes + (sizeof(ListNode) * count);
-	     node->value= cur->value;
-
-	     if(new->last == NULL) {
-	         new->first = node;
-	         new->last = node;
-	     } else {
-	         new->last->next = node;
-	         node->prev = new->last;
-	         new->last = node;
-	     }
-
-	     new->count++;
-	     count++;
-	}*/
+   
 	return new;
 }
 
@@ -64,7 +48,6 @@ void List_clear(List *list)
 	}
 }
 
-
 void List_clear_destroy(List *list)
 {
 	check_hard(list, "Must pass an initilized list");
@@ -77,6 +60,17 @@ void List_clear_destroy(List *list)
 
 	free(list->last);
 	free(list);
+}
+
+void * List_search(List *list, void *item, int (*is_key)(void *, void *)){
+    ListNode *node = list->first;
+    while (node){
+        if (is_key(node->value, item)){
+            return node;
+        }
+        node = node->next;
+    }
+    return NULL;
 }
 
 void List_push(List *list, void *value)
@@ -109,36 +103,20 @@ void *List_pop(List *list)
 	return node != NULL ? List_remove(list, node) : NULL;
 }
 
-void List_shift(List *list, void *value)
+List *List_slice(List *list,int l_index, int h_index)
 {
+    int count = l_index;
+	List * new = List_create(false);
 	check_hard(list, "Must pass an initilized list");
-	ListNode *node = calloc(1, sizeof(ListNode));
-	check_mem(node);
-
-	node->value = value;
-
-	if(list->first == NULL) {
-		list->first = node;
-		list->last = node;
-	} else {
-		node->next = list->first;
-		list->first->prev = node;
-		list->first = node;
-	}
-
-	list->count++;
-error:
-	return;
-
+	check_hard(l_index >=0 && h_index <= list->count && l_index < h_index , "index's are out of bounds");
+	LIST_FOREACH(list, first, next, cur) {
+        if(count<h_index){
+            List_push(new,cur->value);
+            count++;
+        }
+    }
+    return new;
 }
-
-void *List_unshift(List *list)
-{
-	check_hard(list, "Must pass an initilized list");
-	ListNode *node = list->first;
-	return node != NULL ? List_remove(list, node) : NULL;
-}
-
 void *List_remove(List *list, ListNode *node)
 {
 	void *result = NULL;

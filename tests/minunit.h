@@ -1,9 +1,12 @@
-#undef NDEBUG
 #ifndef _minunit_h
 #define _minunit_h
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#define RESET   "\033[0m"
+#define BOLDRED     "\033[1m\033[31m"      /* Bold Red */
+#define BOLDGREEN   "\033[1m\033[32m"      /* Bold Green */
 
 #define mu_suite_start() char *message = NULL
 
@@ -16,10 +19,10 @@
         printf("----\nRUNNING: %s\n", argv[0]);\
         char *result = name();\
         if (result != 0) {\
-            printf("FAILED: %s\n", result);\
+            printf("[" BOLDRED "FAILED: %s" RESET "]" "\n", result);\
         }\
         else {\
-            printf("ALL TESTS PASSED\n");\
+            printf("[" BOLDGREEN "ALL TESTS PASSED" RESET "]" "\n");\
         }\
     printf("Tests run: %d\n", tests_run);\
         exit(result != 0);\
