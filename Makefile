@@ -14,8 +14,6 @@ SO_TARGET=$(patsubst %.a,%.so,$(TARGET))
 # The Target Build
 all: $(TARGET) tests
 
-#dev: CFLAGS=-g -Wall -Isrc -Wall -Wextra $(OPTFLAGS)
-#dev: all
 
 $(TARGET): CFLAGS += -fPIC
 $(TARGET): build $(OBJECTS)
