@@ -21,16 +21,20 @@
 #define debug(M, ...) fprintf(stderr,"[" BOLDCYAN "DEBUG" RESET "]" "%s:%d:" M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #endif
 
-#define clean_errno() (errno == 0 ? " ": strerror(errno))
+#define clean_errno() (errno == 0 ? "n/a": strerror(errno))
 
-#define log_err(M, ...) fprintf(stderr, "[" BOLDRED "ERROR" RESET "]" "(%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
+#define log_warn(M, ...) fprintf(stderr, "%-20s[%s:%d] [E: %s] %s"M"\n",\
+        "[" BOLDYELLOW "WARN" RESET "]",__FILE__,__LINE__, clean_errno(),"", ##__VA_ARGS__)
 
-#define log_warn(M, ...) fprintf(stderr, "[" BOLDYELLOW "WARN" RESET "]" "(%s:%d: errno:%s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
+#define log_success(M, ...) fprintf(stderr,  "%-20s[%s:%d] %s "M" \n",\
+       "[" BOLDGREEN "OK" RESET "]", __FILE__, __LINE__,"", ##__VA_ARGS__)
 
-#define log_info(M, ...) fprintf(stderr, "[ " BOLDWHITE "INFO" RESET " ]" "(%s:%d) " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#define log_info(M, ...) fprintf(stderr,  "%-20s[%s:%d] %s"M "\n",\
+       "[" BOLDWHITE "INFO" RESET "]", __FILE__, __LINE__ ,"", ##__VA_ARGS__)
+
+#define log_err(M, ...) fprintf(stderr,  "%-20s[%s:%d] [E: %s] %s"M"\n",\
+       "[" BOLDRED "ERROR" RESET "]", __FILE__, __LINE__, clean_errno(),"", ##__VA_ARGS__)
  
-#define log_success(M, ...) fprintf(stderr, "[" BOLDGREEN "OK" RESET "]" "(%s:%d) " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
-  
 #define check(A, M, ...) if(!(A)) { log_err(M, ##__VA_ARGS__); errno=0; goto error; } 
   
 #define check_hard(A, M, ...) if(!(A)) { log_err(M, ##__VA_ARGS__); errno=0; exit(1); } 

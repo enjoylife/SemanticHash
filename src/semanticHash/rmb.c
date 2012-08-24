@@ -60,19 +60,13 @@ PretrainModel * pretrain_create(
 	return new_m;                         // give back our newly created model
 }
 
-/*void pretrain_destroy(
-	PretrainModel * model)
-{
-    model;
-	//TODO
-}*/
-
 gsl_matrix * single_step_constrastive_convergence(
         gsl_matrix * input,
         gsl_vector * visible_bias, gsl_vector * hidden_bias,
         gsl_matrix * weights, double learning_rate)
 {
     unsigned int i,j;
+
     // up
     gsl_matrix * hidden = get_batched_hidden_probablities_blas(input, hidden_bias, weights);
     for(i=0;i<hidden->size1;i++){
@@ -93,9 +87,21 @@ gsl_matrix * single_step_constrastive_convergence(
     //up
     gsl_matrix * hidden_reconstructed = get_batched_hidden_probablities_blas(visible_reconstructed,hidden_bias,weights);
 
-    // input = [a,b] hidden
-    gsl_matrix_mul_elements(hidden, input);
-    return hidden_reconstructed;
+    gsl_matrix * temp_data = gsl_matrix_alloc(weights->size1,weights->size2);
+    gsl_matrix * temp_recon = gsl_matrix_alloc(weights->size1,weights->size2);
+    // visible [m,n] matrix, hidden [m,z] matrix, 
+    // visible [1,z] hidden  [1,n] 
+    // [n,z] matrix
+    check_hard(input->size1 == hidden->size1,"mismatched dimensions");
+    check_hard(visible_reconstructed->size1 == hidden_reconstructed->size1,"mismatched dimensions");
+    log_info("input dimensions [%ld,%ld]",input->size1,input->size2);
+    log_info("hidden dimensions [%ld,%ld]",hidden->size1,hidden->size2);
+    gsl_blas_dgemm(CblasTrans,CblasNoTrans,1.0,input,hidden,1.0,temp_data);
+    gsl_blas_dgemm(CblasTrans,CblasNoTrans,1.0,visible_reconstructed,hidden_reconstructed,1.0,temp_recon);
+    gsl_matrix_sub(temp_data,temp_recon);
+    gsl_matrix_scale(temp_data,1/input->size1); //scale by batch size
+    gsl_matrix_scale(temp_data,learning_rate);
+    return temp_data;
 }
 
 /* CALLED IN: single_step_constrastive_convergence.
@@ -106,7 +112,7 @@ gsl_matrix * single_step_constrastive_convergence(
  * PARAMS:
  *      [m,n] matrix, [1,z] vector , [n,z] matrix
  * RETURNS:
- *      [m,n] matrix.
+ *      [m,z] matrix.
  */
 gsl_matrix * get_batched_hidden_probablities_blas(
 	gsl_matrix * input, gsl_vector * hidden_bias, gsl_matrix * weights)
@@ -134,7 +140,7 @@ gsl_matrix * get_batched_hidden_probablities_blas(
  * Equation Number: (1)
  *
  * PARAMS:
- *      [m,n] matrix,
+ *      [m,n] matrix, [m,z] matrix, [1,z] vector, [1,n] vector, [n,z] matrix
  * RETURNS:
  *      [m,n] matrix
  */
@@ -253,118 +259,3 @@ double energy(
 }
 
 /********* END Helpers *********/
-
-/* CALLED IN: single_step_constrastive_convergence.
- *
- * Paper: Ruslan Salakhutdinov and Geoffrey Hinton. Semantic hashing.
- * Equation Number: (2)
- *
- * PARAMS:
- *      [m,n] matrix, [1,z] vector , [z,n] matrix
- * RETURNS:
- *      [m,z] matrix.
- *
- * NOTE: the weight matrix needs to be in column major, with respect to the visible matrix.*/
-/*gsl_matrix * get_batched_hidden_probablities(
-	gsl_matrix * visible, gsl_vector * hidden_bias, gsl_matrix * weights)
-{
-
-	unsigned int i, j;
-	double sum;
-	double result;
-	double final_result;
-	gsl_matrix * hidden;
-	hidden = gsl_matrix_calloc(visible->size1, hidden_bias->size);
-
-	check_hard(weights->size1 == hidden_bias->size,
-			   "Wrong Dimensions, weight_vec is: %zu, hidden_vec is %zu", weights->size1 , hidden_bias->size);
-	check_hard(visible->size2 == weights->size2, "Visible and weight matrices don't match");
-
-	for(i = 0; i < visible->size1; i++) { //for each visible entry
-		gsl_vector_const_view  single_visible = gsl_matrix_const_row(visible, i);
-		sum = 0;
-		for(j = 0; j < hidden_bias->size; j++) { //for each dimension of bias
-			gsl_vector_const_view  weight_vector = gsl_matrix_const_row(weights, j);
-			gsl_blas_ddot(&weight_vector.vector, &single_visible.vector, &result);
-			sum += result;
-			final_result = sigmoid(gsl_vector_get(hidden_bias, j) + sum);
-			gsl_matrix_set(hidden, i, j, final_result);
-		}
-	}
-	return hidden;
-}
-*/
-/* CALLED IN: single_step_constrastive_convergence.
- *
- * Paper: Ruslan Salakhutdinov and Geoffrey Hinton. Semantic hashing.
- * Equation Number: (1)
- *
- * PARAMS:
- *      [m,n] matrix, [1,z] vector , [1,z] vector , [z,n] matrix
- * RETURNS:
- *      [m,n] matrix
- *
- * NOTE: the weight matrix needs to be in column major, with respect to the input matrix.*/
-/*gsl_matrix * get_batched_visible_probablities(
-	gsl_matrix * input, gsl_matrix * hidden, gsl_vector * visible_bias, gsl_matrix * weights)
-{
-	unsigned int i, j;
-	double numerator;
-	double denominator;
-	double multiplier;
-	double sum;
-	double result;
-	double  * cached_results;
-	gsl_matrix * visible;
-
-	// create the cache for numerator
-	cached_results = (double *)calloc(input->size1, sizeof(double));
-	// create the matrix we eventually return
-	visible = gsl_matrix_calloc(input->size1, visible_bias->size);
-
-	// Fill the cache for numerator
-	sum = 0;
-	denominator = 0;
-	//TODO use cblas level2?
-	check_hard(hidden->size2 == weights->size1, "Mismatched hidden length with  weight matrix rows");
-	check_hard(input->size2 == weights->size2, "Mismatched input rows with  weight matrix rows");
-	check_hard(visible_bias->size == weights->size2, "Mismatched visible_bias length with  weight matrix rows");
-	for(i = 0; i < input->size1; i++) { // for each input
-		gsl_vector_view hidden_vector = gsl_matrix_row(hidden, i);
-		for(j = 0; j < input->size2; j++) { // for each dimension of that single input
-			gsl_vector_view weight_vector = gsl_matrix_column(weights, j);
-			gsl_blas_ddot(&hidden_vector.vector, &weight_vector.vector , &result);
-			sum += result;
-		}
-		result = gsl_sf_exp(gsl_vector_get(visible_bias, i) + sum);
-		cached_results[i] = result;
-		denominator += result;
-	}
-
-
-	for(i = 0; i < input->size1; i++) {
-		gsl_vector_view  input_row = gsl_matrix_row(input, i);    // get the single data point to work with
-
-		for(j = 0; j < input->size2; j++) {
-			multiplier += gsl_vector_get(&input_row.vector, j);
-		}
-	}
-
-	for(i = 0; i < input->size1; i++) { // for each input
-		numerator = cached_results[i]; // grab our previous computation
-		gsl_vector_view  input_row = gsl_matrix_row(input, i);    //  get the single input
-		multiplier = 0;
-		for(j = 0; j < input->size2; j++) {
-			multiplier += gsl_vector_get(&input_row.vector, j);
-		}
-		for(j = 0; j < input->size2; j++) {
-			gsl_matrix_set(visible, i, j,
-						   gsl_ran_poisson_pdf(gsl_vector_get(&input_row.vector, j), numerator / denominator * multiplier));
-		}
-	}
-	free(cached_results);
-	return visible;
-}
-*/
-
-

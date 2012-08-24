@@ -21,12 +21,11 @@ typedef struct PretrainModel {
 }PretrainModel;
 
 PretrainModel * pretrain_create(double learning_rate, int input_dimension, int layer_dimension[]);
+gsl_matrix * single_step_constrastive_convergence(
+        gsl_matrix * input,
+        gsl_vector * visible_bias, gsl_vector * hidden_bias,
+        gsl_matrix * weights, double learning_rate);
 
-/*gsl_matrix * get_batched_hidden_probablities(
-        gsl_matrix * visible, gsl_vector * hidden_bias, gsl_matrix * weights);
-gsl_matrix * get_batched_visible_probablities(
-        gsl_matrix * input, gsl_matrix * hidden, gsl_vector * visible_bias, gsl_matrix * weights);
-        */
 gsl_matrix * get_batched_hidden_probablities_blas(
 	gsl_matrix * input, gsl_vector * hidden_bias, gsl_matrix * weights);
 gsl_matrix * get_batched_visible_probablities_blas(
