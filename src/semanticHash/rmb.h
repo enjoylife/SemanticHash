@@ -30,7 +30,7 @@ void pretrain( PretrainModel * test, FILE * input_file, int batch_size, int sing
 /* should be followed by a pretrain_destroy when done */
 PretrainModel * pretrain_create(double learning_rate, int layer_dimension[]);
 
-// TODO pretrain_destroy
+void pretrain_destroy(PretrainModel * model);
 
 void single_step_constrastive_convergence(
 	gsl_matrix * input,

@@ -15,12 +15,6 @@
 #define EPSILON 0.0000001 // for float_check
 
 int float_check(double a, double b);
-char * test_layer_creation();
-char * test_hidden_probablities_blas();
-char * test_hidden_probablities_on_data();
-char * test_visible_probablities_blas();
-char * test_visible_probablities_on_data();
-char * test_pretraining();
 
 /* Helpers */
 
@@ -72,19 +66,20 @@ char * test_layer_creation()
     mu_assert(rbm->first_layer->next->weights->size2 == 4,"weight layer improper");
     mu_assert(rbm->first_layer->next->next->weights->size1 == 4,"weight layer improper");
     mu_assert(rbm->first_layer->next->next->weights->size2 == 2,"weight layer improper");
+    pretrain_destroy(rbm);
 	log_success("Creation of layers");
 	return NULL;
 }
 
-char * test_hidden_probablities_blas()
+char * test_hidden_probablities_dimensions()
 {
 
 	// [m,n] matrix, [1,z] vector , [n,z] matrix
 	unsigned int m = 10;
 	unsigned int n = 200;
 	unsigned int z = 50;
-	gsl_matrix * test_visible = gsl_matrix_alloc(m, n); // row major
-	gsl_matrix * test_weights = gsl_matrix_alloc(n, z);  //col major
+	gsl_matrix * test_visible = gsl_matrix_calloc(m, n); // row major
+	gsl_matrix * test_weights = gsl_matrix_calloc(n, z);  //col major
 	gsl_vector * test_hidden_bias = gsl_vector_calloc(z);
 
 	gsl_matrix * new_hidden = get_batched_hidden_probablities_blas(test_visible, test_hidden_bias, test_weights);
@@ -97,6 +92,7 @@ char * test_hidden_probablities_blas()
 	log_success("hidden probablity works");
     gsl_matrix_free(test_visible);
     gsl_matrix_free(test_weights);
+    gsl_matrix_free(new_hidden);
     gsl_vector_free(test_hidden_bias);
 	return NULL;
 }
@@ -149,7 +145,7 @@ char * test_hidden_probablities_on_data()
 
 }
 
-char * test_visible_probablities_blas()
+char * test_visible_probablities_dimensions()
 {
 	gsl_matrix * test_visible = gsl_matrix_calloc(2, 4); // row major
 	gsl_matrix * test_weights = gsl_matrix_calloc(4, 3);  //col major
@@ -165,6 +161,8 @@ char * test_visible_probablities_blas()
 	log_success("Visible probablity works");
 	gsl_vector_free(test_hidden_bias);
 	gsl_vector_free(test_visible_bias);
+	gsl_matrix_free(new_hidden);
+	gsl_matrix_free(new_visible);
 	gsl_matrix_free(test_weights);
 	gsl_matrix_free(test_visible);
 	return NULL;
@@ -244,6 +242,7 @@ char * test_visible_probablities_on_data()
 	gsl_vector_free(hidden_bias);
 	gsl_vector_free(visible_bias);
 	gsl_matrix_free(weights);
+	gsl_matrix_free(reconstruction);
 	gsl_matrix_free(input);
 	gsl_matrix_free(new_hidden);
 	return NULL;
@@ -264,29 +263,28 @@ char * test_batch_read_in()
     mu_assert(test_file,"file for testing error");
     mu_assert(2==read_in_batch(test_matrix, test_file,batch_size,5),"wrong read in size");
     mu_assert(1==read_in_batch(test_matrix, test_file,batch_size,5),"wrong read in size");
+    gsl_matrix_free(test_matrix);
+    fclose(test_file);
     return NULL;
 }
 
-char * test_pretraining()
+char * test_single_step()
 {
 	
 	// SETUP
 	// [m,n] matrix, [m,z] matrix, [1,z] vector, [1,n] vector, [n,z] matrix
-	int m = 1;
-	int n = 2;
-	int z = 2;
+	int m = 10;
+	int n = 20;
+	int z = 20;
     double learning_rate = 0.1;
-	unsigned int i, j, k, v;
+	unsigned int i, j;
 	gsl_matrix * weights;
 	gsl_matrix * input;
 	gsl_vector * hidden_bias;
 	gsl_vector * visible_bias;
-	gsl_matrix * new_hidden;
-	gsl_matrix * reconstruction;
 
-
-	weights = gsl_matrix_alloc(n, z);
 	input = gsl_matrix_alloc(m, n);
+	weights = gsl_matrix_alloc(n, z);
 	hidden_bias = gsl_vector_alloc(z);
 	visible_bias = gsl_vector_alloc(n);
 
@@ -295,19 +293,26 @@ char * test_pretraining()
 
     for(i=0;i<weights->size1;i++){
         for(j=0;j<weights->size2;j++){
-            //log_info("new %f", gsl_matrix_get(weights,i,j));
+    //        log_info("weights %f", gsl_matrix_get(weights,i,j));
         }
     }
-	new_hidden = get_batched_hidden_probablities_blas(input, hidden_bias, weights);
-	reconstruction = get_batched_visible_probablities_blas(input, new_hidden, visible_bias, weights);
     single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
-    for(i=0;i<weights->size1;i++){
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+    single_step_constrastive_convergence(input,visible_bias,hidden_bias,weights,learning_rate,FIRSTLAYER);
+/*    for(i=0;i<weights->size1;i++){
+            log_info("visible %f", gsl_vector_get(visible_bias,i));
         for(j=0;j<weights->size2;j++){
-            //log_info("old %f", gsl_matrix_get(weights,i,j));
+            log_info("weights %f", gsl_matrix_get(weights,i,j));
+            log_info("hidden %f", gsl_vector_get(hidden_bias,j));
         }
-    }
+    }*/
     
-
 	log_warn("Small number of test cases");
 	log_success("pretraining works");
 
@@ -315,20 +320,19 @@ char * test_pretraining()
 	gsl_vector_free(visible_bias);
 	gsl_matrix_free(weights);
 	gsl_matrix_free(input);
-	gsl_matrix_free(new_hidden);
 	return NULL;
 }
 
 char *all_tests()
 {
 	mu_suite_start();
-	mu_run_test(test_layer_creation);
-	mu_run_test(test_hidden_probablities_blas);
-	mu_run_test(test_visible_probablities_blas);
+	mu_run_test(test_single_step);
 	mu_run_test(test_hidden_probablities_on_data);
+	mu_run_test(test_layer_creation);
+	mu_run_test(test_hidden_probablities_dimensions);
+	mu_run_test(test_visible_probablities_dimensions);
 	mu_run_test(test_visible_probablities_on_data);
     mu_run_test(test_batch_read_in);
-	//mu_run_test(test_pretraining);
 	return NULL;
 }
 

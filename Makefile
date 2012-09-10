@@ -1,4 +1,4 @@
-CFLAGS=-g  -lgsl -lgslcblas -O2 -Wall -Wextra -Isrc -rdynamic -DNDEBUG $(OPTFLAGS)
+CFLAGS= -g  -lgsl -lgslcblas -O2 -Wall -Wextra -Isrc -rdynamic -DNDEBUG $(OPTFLAGS)
 LIBS=$(OPTLIBS)
 PREFIX?=/usr/local
 
@@ -8,7 +8,7 @@ OBJECTS=$(patsubst %.c,%.o,$(SOURCES))
 TEST_SRC=$(wildcard tests/*_tests.c)
 TESTS=$(patsubst %.c,%,$(TEST_SRC))
 
-TARGET=build/semanticHash  # Rename to your library !!!!!
+TARGET=build/semanticHash  # Rename to library !!!!!
 SO_TARGET=$(patsubst %.a,%.so,$(TARGET))
 
 # The Target Build

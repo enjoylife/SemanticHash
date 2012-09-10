@@ -15,18 +15,16 @@
 #define ARRAYSIZE(x)  (sizeof x / sizeof *x)
 
 
-/* We need to go through each layer single_layer_epoch number of times, updating the weights 
+/* We need to go through each layer single_layer_epoch number of times, updating the weights
  * after a batch_size of input. We do this for each layer in the PretrainModel.
  * Any error we fail hard and bail the rest of training.
  * TODO: Incorperate training config options for custom learning stuff. */
 void pretrain( PretrainModel * test, FILE * input_file, int batch_size, int single_layer_epoch)
 {
 	int k; // epoch counter
-    int i;
-    int j, size, data, layer_type;
-    int batch_check;
+	int j,  layer_type;
+	int batch_check;
 	gsl_matrix * input;
-	char ** input_line;
 
 	check_hard(input_file, "File pointer not valid");
 	rbmLayer * layer = test->first_layer;
@@ -38,7 +36,7 @@ void pretrain( PretrainModel * test, FILE * input_file, int batch_size, int sing
 		if(layer == test->first_layer) { // need to read in from file
 			for(k = 0; k < single_layer_epoch; k++) {
 				rewind(input_file); // we need all input
-                batch_check = read_in_batch(input, input_file, batch_size, layer->dimension);
+				batch_check = read_in_batch(input, input_file, batch_size, layer->dimension);
 				if(batch_check != batch_size) { // we need a view of the matrices for only the rows of data read in
 					gsl_matrix_view partial_batch_input = gsl_matrix_submatrix(input, 0, 0, batch_check, j);
 					gsl_matrix_view partial_batch_weights = gsl_matrix_submatrix(layer->weights, 0, 0, batch_check, j);
@@ -53,6 +51,7 @@ void pretrain( PretrainModel * test, FILE * input_file, int batch_size, int sing
 
 			} // all epochs complete
 		} // finished with FIRSTLAYER
+
 		// TODO The rest of the other layer learning
 		else {
 			layer_type = GENERAL;
@@ -62,46 +61,49 @@ void pretrain( PretrainModel * test, FILE * input_file, int batch_size, int sing
 	}
 }
 
-
 /* Has to deal with having non divisible number of input lines with respect to batch_size
- * so it returns the actual size read in, which may be different than the batch_size. */
-int  read_in_batch(gsl_matrix * input_matrix, FILE * input_file, int batch_size, int input_dimension){
-    int i, j, size;
-    double value;
-    char *delim = " "; // input separated by spaces
-    char *token = NULL;
-    char *unconverted;
-    size_t nbytes = 100;
-    char *input_line;
-    input_line = (char *) malloc(nbytes);
+ * so it returns the actual size read in, which may be different than the batch_size.
+ * NOTE: Called only for first_layer when we are pretraining.*/
+int read_in_batch(gsl_matrix * input_matrix, FILE * input_file, int batch_size, int input_dimension)
+{
+	signed int i, j;
+	int  size;
+	double value;
+	char *delim = " "; // input separated by spaces
+	char *token = NULL;
+	char *unconverted;
+	size_t nbytes = 100;
+	char *input_line;
+	input_line = (char *) malloc(nbytes);
 
-    check_hard(input_file,"Invalid file");
-    check_hard(input_matrix->size1 == batch_size,"wrong row dimension");
-    check_hard(input_matrix->size2 == input_dimension,"wrong column dimension");
+	check_hard(input_file, "Invalid file");
+	//check_hard(input_matrix->size1 == batch_size, "wrong row dimension");
+	//check_hard(input_matrix->size2 == input_dimension, "wrong column dimension");
 
-    for(i = 0; i < batch_size; i++) { // we may read in less than batch_size lines
-        size = getline(&input_line, &nbytes, input_file);
-        check_hard(input_line,"line ptr not alloced");
-        check_hard(*input_line,"line not alloced");
-        //log_info("string is %s",input_line);
-        if(size == -1) { // end of file
-            break;
-        }
-        for (j = 0, token = strtok(input_line, delim); token != NULL; token = strtok(NULL, delim),j++)
-        {
-            check_hard(j <= input_dimension,"out of bounds for column length");
-            value = strtod(token, &unconverted);
-            //check_hard(!isspace(*unconverted) && *unconverted != 0,"Input string contains invalid char");
-            gsl_matrix_set(input_matrix,i,j,value);
-        }
-    } 
-    free(input_line);
-    return i; // total number of rows read in
+	for(i = 0; i < batch_size; i++) { // we may read in less than batch_size lines
+		size = getline(&input_line, &nbytes, input_file);
+		check_hard(input_line, "line ptr not alloced");
+		check_hard(*input_line, "line not alloced");
+		//log_info("string is %s",input_line);
+		if(size == -1) { // end of file
+			break;
+		}
+		for (j = 0, token = strtok(input_line, delim); token != NULL; token = strtok(NULL, delim), j++) {
+			check_hard(j <= input_dimension, "out of bounds for column length");
+			value = strtod(token, &unconverted);
+			//check_hard(!isspace(*unconverted) && *unconverted != 0,"Input string contains invalid char");
+			gsl_matrix_set(input_matrix, i, j, value);
+		}
+	}
+	free(input_line);
+	return i; // total number of rows read in
 }
+
 /* RETURNS:
  *      A newly set up PretrainModel with the correct amount of layers, etc...
  *
- * NOTE: the weight matrix is stored column major.
+ * NOTE: the weight matrix for each layer is current layers dimension rows deep, and layer+1
+ * dimension columns wide.
  * TODO create function pointers for custom stuff; error_func, parameter printing, etc... */
 PretrainModel * pretrain_create(
 	double learning_rate, int layer_dimension[])
@@ -148,6 +150,21 @@ PretrainModel * pretrain_create(
 	return new_m;                         // give back our newly created model
 }
 
+void pretrain_destroy(PretrainModel * model)
+{
+	rbmLayer * temp;
+	rbmLayer * l = model->first_layer;
+	while(l) {
+		temp = l;
+		gsl_matrix_free(temp->weights);
+		gsl_vector_free(temp->hidden_bias);
+		gsl_vector_free(temp->visible_bias);
+		l = l->next;
+		free(temp);
+	}
+	free(model);
+}
+
 void single_step_constrastive_convergence(
 	gsl_matrix * input,
 	gsl_vector * visible_bias, gsl_vector * hidden_bias,
@@ -155,12 +172,27 @@ void single_step_constrastive_convergence(
 {
 	unsigned int i, j;
 	gsl_rng * randgen;
+
+	gsl_matrix * hidden;
 	gsl_matrix * visible_reconstructed;
+	gsl_matrix * hidden_reconstructed;
+	gsl_matrix * temp_data;
+	gsl_matrix * temp_recon;
 	randgen = gsl_rng_alloc (gsl_rng_taus); //fastest
-	gsl_rng_set(randgen, (unsigned long int) 10);//time(NULL));
+	gsl_rng_set(randgen, (unsigned long int) 10);// TODO: Change to time(NULL));
+
 	// up
-	gsl_matrix * hidden = get_batched_hidden_probablities_blas(input, hidden_bias, weights);
-	// TODO Compare to a zero mean gaussian like in the matlab code
+	/*log_info("hidden");
+	gsl_vector_fprintf(stdout,hidden_bias,"%f");
+	log_info("input");
+	gsl_matrix_fprintf(stdout,input,"%f");
+	log_info("weights");
+	gsl_matrix_fprintf(stdout,weights,"%f");
+	*/
+
+	hidden = get_batched_hidden_probablities_blas(input, hidden_bias, weights);
+
+	// Compare to a zero mean gaussian like in the matlab code
 	for(i = 0; i < hidden->size1; i++) {
 		for(j = 0; j < hidden->size2; j++) {
 			double elem = gsl_matrix_get(hidden, i, j);
@@ -168,18 +200,19 @@ void single_step_constrastive_convergence(
 			( rando < elem ) ? gsl_matrix_set(hidden, i, j, 1.0) : gsl_matrix_set(hidden, i, j, 0);
 		}
 	}
+
+	// down
 	if(layer_type == FIRSTLAYER) {
-		// down
 		visible_reconstructed = get_batched_visible_probablities_blas(input, hidden, visible_bias, weights);
 	} else if(layer_type == GENERAL) {
-		//up
-		//visible_reconstructed = get_batched_general_probablities_blas(
+		visible_reconstructed = get_batched_general_probablities_blas(hidden, visible_bias, weights);
 	}
 
-	gsl_matrix * hidden_reconstructed = get_batched_hidden_probablities_blas(visible_reconstructed, hidden_bias, weights);
+	// up
+	hidden_reconstructed = get_batched_hidden_probablities_blas(visible_reconstructed, hidden_bias, weights);
+	temp_data = gsl_matrix_calloc(weights->size1, weights->size2);
+	temp_recon = gsl_matrix_calloc(weights->size1, weights->size2);
 
-	gsl_matrix * temp_data = gsl_matrix_calloc(weights->size1, weights->size2);
-	gsl_matrix * temp_recon = gsl_matrix_calloc(weights->size1, weights->size2);
 	// visible [m,n] matrix, hidden [m,z] matrix,
 	// visible [1,z] hidden  [1,n]
 	// weights [n,z] matrix
@@ -216,20 +249,23 @@ void single_step_constrastive_convergence(
 	gsl_vector_scale(hidden_bias, learning_rate);
 
 	// upate visible_bias
-	gsl_matrix_sub(input, visible_reconstructed);
+	//gsl_matrix_sub(input, visible_reconstructed);
 	for(i = 0; i < input->size2; i++) {
 		double sum = 0;
 		for(j = 0; j < input->size1; j++) {
 			//flatten the matrix
-			sum += gsl_matrix_get(input, j, i);
+			sum += gsl_matrix_get(input, j, i) - gsl_matrix_get(visible_reconstructed, j, i);
 		}
 		gsl_vector_set(visible_bias, i, sum);
 	}
 	gsl_vector_scale(visible_bias, 1 / input->size1);
 	gsl_vector_scale(visible_bias, learning_rate);
 
+	gsl_matrix_free(hidden);
 	gsl_matrix_free(temp_recon);
 	gsl_matrix_free(temp_data);
+	gsl_matrix_free(hidden_reconstructed);
+	gsl_matrix_free(visible_reconstructed);
 	gsl_rng_free(randgen);
 }
 
@@ -247,6 +283,7 @@ gsl_matrix * get_batched_general_probablities_blas(
 		gsl_vector_memcpy(temp, visible_bias); // temp gets overwritten each call
 		gsl_vector_view data = gsl_matrix_row(input, i);
 		gsl_blas_dgemv(CblasNoTrans, 1.0, weights, &data.vector, 1.0 , temp);
+		log_warn("MADIT@");
 		sigmoid_vector(temp);
 		gsl_matrix_set_row(hidden, i, temp);
 	}
@@ -275,7 +312,10 @@ gsl_matrix * get_batched_hidden_probablities_blas(
 	for(i = 0; i < input->size1; i++) { //for each visible entry
 		gsl_vector_memcpy(temp, hidden_bias); // temp gets overwritten each call
 		gsl_vector_view data = gsl_matrix_row(input, i);
+		// TODO: Fix why this explodes numerically
 		gsl_blas_dgemv(CblasTrans, 1.0, weights, &data.vector, 1.0 , temp);
+		//log_info("temp after");
+		//gsl_vector_fprintf(stdout,temp,"%f");
 		sigmoid_vector(temp);
 		gsl_matrix_set_row(hidden, i, temp);
 	}
@@ -296,8 +336,7 @@ gsl_matrix * get_batched_hidden_probablities_blas(
 gsl_matrix * get_batched_visible_probablities_blas(
 	gsl_matrix * input, gsl_matrix * hidden, gsl_vector * visible_bias, gsl_matrix * weights)
 {
-	unsigned int i, j, k, v;
-	double numerator;
+	unsigned int i, j;
 	double multiplier;
 	double sum;
 	double result;
@@ -362,6 +401,7 @@ void  exp_vector(gsl_vector * vec)
 {
 	unsigned int i = 0;
 	for(; i < vec->size; i++) {
+		//log_info("%f",gsl_vector_get(vec, i));
 		gsl_vector_set(vec, i, gsl_sf_exp(gsl_vector_get(vec, i)));
 	}
 }
@@ -375,8 +415,9 @@ void sigmoid_vector(gsl_vector * vec)
 }
 double sigmoid(double x)
 {
-	//return 1 / (1 + gsl_sf_exp(-x)); dont use  unless underflow errors flag set when compiling
-	return 1 / (1 + gsl_sf_exp(-x));
+	//log_info("%f",x);
+	return 1 / (1 + gsl_sf_exp(-x));// dont use  unless underflow errors flag set when compiling
+	//return 1 / (1 + exp(-x));
 }
 
 /* Equ (4),
